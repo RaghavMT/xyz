@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://api.github.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; object-src blob:; connect-src 'self' https://api.github.com https://cdn.jsdelivr.net raw.githubusercontent.com blob:;">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>MYR Secure Vault</title>
+    <meta name="title" content="MYR Secure Vault">
+    <meta name="description" content="Secure, client-side encrypted cloud archive. Mount AES-256 protected blobs directly into local RAM.">
+
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://unskyit.github.io/vault/">
+    <meta property="og:title" content="MYR Secure Vault">
+    <meta property="og:description" content="Secure, client-side encrypted cloud archive. Mount AES-256 protected blobs directly into local RAM.">
+    <meta property="og:image" content="https://unskyit.github.io/vault/banner.jpg">
+
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://unskyit.github.io/vault/">
+    <meta property="twitter:title" content="MYR Secure Vault">
+    <meta property="twitter:description" content="Secure, client-side encrypted cloud archive. Mount AES-256 protected blobs directly into local RAM.">
+    <meta property="twitter:image" content="https://unskyit.github.io/vault/banner.jpg">
+    
+    <script src="https://cdn.jsdelivr.net/npm/@zip.js/zip.js/dist/zip.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        :root {
+            --bg: #F9F8F6;
+            --surface: #FFFFFF;
+            --text: #1A1A1A; 
+            --text-muted: #595753; 
+            --accent: #B8962E; 
+            --accent-hover: #9E8127;
+            --border: #DCD7CE; 
+            --danger: #D9534F;
+            --success: #5CB85C;
+            --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.04);
+            --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.1);
+            --radius: 16px;
+            --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            --mono: 'JetBrains Mono', monospace;
+        }
+
+        [data-theme="dark"] {
+            --bg: #141413;
+            --surface: #1E1D1C;
+            --text: #F0EFEA;
+            --text-muted: #A3A09A;
+            --accent: #D4AF37;
+            --accent-hover: #E3C154;
+            --border: #33312E;
+            --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+        body { font-family: var(--font); background: var(--bg); background-image: radial-gradient(var(--border) 1px, transparent 1px); background-size: 24px 24px; color: var(--text); transition: background 0.4s ease, color 0.4s ease; line-height: 1.6; -webkit-tap-highlight-color: transparent; min-height: 100vh; display: flex; flex-direction: column; padding-bottom: 40px; }
+        
+        header { display: flex; justify-content: space-between; align-items: center; padding: 1.2rem 5%; background: rgba(var(--surface), 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 50; }
+        .logo { font-size: 1.4rem; font-weight: 700; letter-spacing: 0.5px; color: var(--text); display: flex; align-items: center; gap: 8px;}
+        .logo span { color: var(--accent); }
+        
+        button { cursor: pointer; border: none; font-family: inherit; transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1); outline: none; }
+        button:active { transform: scale(0.95); }
+        button:disabled { cursor: not-allowed; opacity: 0.7; transform: none; }
+        #theme-toggle { background: var(--border); border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: var(--text); transition: transform 0.3s; }
+        #theme-toggle:hover { background: var(--text); color: var(--bg); transform: rotate(15deg); }
+        
+        main { width: 100%; max-width: 900px; margin: 2rem auto; padding: 0 1.5rem; flex: 1; }
+        
+        .view { display: none; opacity: 0; animation: fadeIn 0.4s forwards; }
+        .view.active { display: block; }
+        .hidden { display: none !important; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        h1, h2, h3 { font-weight: 600; margin-bottom: 0.5rem; letter-spacing: -0.3px; }
+        .subtitle { color: var(--text-muted); margin-bottom: 2rem; font-size: 0.95rem; }
+        
+        .hero-banner { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; margin-bottom: 2rem; text-align: center; box-shadow: var(--shadow-sm); }
+        .hero-banner svg { color: var(--accent); margin-bottom: 1rem; }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
+        .grid.list-view { display: flex; flex-direction: column; gap: 0.8rem; }
+        
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; box-shadow: var(--shadow-sm); transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); }
+        #zip-list .card { cursor: pointer; position: relative; overflow: hidden; }
+        #zip-list .card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--accent); opacity: 0; transition: opacity 0.3s; }
+        #zip-list .card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); border-color: transparent; }
+        #zip-list .card:active { transform: translateY(-1px); }
+        #zip-list .card:hover::before { opacity: 1; }
+        
+        .card-title { font-size: 1.15rem; word-break: break-all; display: flex; align-items: center; gap: 8px; }
+        .card-meta { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.8rem; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 0.8rem;}
+        
+        .detail-card { max-width: 480px; margin: 0 auto; text-align: center; }
+        .meta-data { text-align: left; margin: 1.5rem 0; background: var(--bg); padding: 1.2rem; border-radius: 12px; font-size: 0.9rem; border: 1px solid var(--border); }
+        .meta-data p { margin-bottom: 0.5rem; display: flex; justify-content: space-between; }
+        .meta-data p:last-child { margin-bottom: 0; }
+        
+        .primary-btn, .danger-btn, .secondary-btn { padding: 0.9rem 1.5rem; border-radius: 10px; font-weight: 600; width: 100%; font-size: 1rem; display: flex; align-items: center; justify-content: center; gap: 8px;}
+        .primary-btn { background: var(--accent); color: #fff; box-shadow: 0 4px 15px rgba(184, 150, 46, 0.25); }
+        .primary-btn:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(184, 150, 46, 0.35); }
+        .primary-btn:active:not(:disabled) { transform: translateY(0); }
+        
+        .danger-btn { background: var(--danger); color: #fff; }
+        .danger-btn:hover:not(:disabled) { box-shadow: 0 4px 15px rgba(217, 83, 79, 0.3); transform: translateY(-2px); }
+        
+        .secondary-btn { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
+        .secondary-btn:hover { background: var(--border); }
+
+        .back-btn { background: none; color: var(--text-muted); margin-bottom: 1.5rem; font-weight: 500; font-size: 1rem; display: flex; align-items: center; gap: 5px; }
+        .back-btn:hover { color: var(--text); }
+        
+        input[type="password"], input[type="text"] { width: 100%; padding: 1rem; margin-top: 1rem; border: 2px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--text); outline: none; transition: border-color 0.3s; font-family: var(--font); font-size: 1rem; }
+        input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(184, 150, 46, 0.1); }
+        .error-text { color: var(--danger); font-size: 0.9rem; margin-top: 0.8rem; font-weight: 500; }
+        
+        .progress-container { width: 100%; background: var(--border); border-radius: 8px; height: 8px; margin-top: 1rem; overflow: hidden; position: relative; }
+        .progress-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s ease; border-radius: 8px; }
+        .progress-text { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem; display: block; text-align: center; font-family: var(--mono); }
+        .indeterminate .progress-bar { width: 50%; animation: pulse-load 1.5s infinite ease-in-out; }
+        @keyframes pulse-load { 0% { transform: translateX(-100%); } 100% { transform: translateX(200%); } }
+        
+        #timer-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0.8rem 5%; display: flex; justify-content: space-between; align-items: center; font-weight: 600; color: var(--accent); box-shadow: var(--shadow-sm); }
+        #countdown { font-variant-numeric: tabular-nums; font-size: 1.2rem; background: var(--bg); padding: 0.2rem 0.8rem; border-radius: 6px; margin-left: 10px;}
+        #close-vault-btn { width: auto; padding: 0.5rem 1.2rem; font-size: 0.9rem; margin: 0; }
+        
+        .vault-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .vault-toolbar { display: flex; gap: 1rem; margin-bottom: 2rem; }
+        #vault-search { margin-top: 0; flex-grow: 1; box-shadow: var(--shadow-sm); }
+        
+        .file-card { display: flex; align-items: center; padding: 1rem 1.2rem; justify-content: space-between; gap: 1rem; }
+        .folder-card { cursor: pointer; background: rgba(184, 150, 46, 0.04); border-color: rgba(184, 150, 46, 0.2); }
+        .folder-card:hover { border-color: var(--accent); background: rgba(184, 150, 46, 0.08); }
+        .file-info { display: flex; align-items: center; gap: 1rem; overflow: hidden; flex: 1; }
+        .file-icon { font-size: 1.8rem; display: flex; align-items: center; justify-content: center; }
+        .file-name { font-weight: 500; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .file-actions { display: flex; gap: 0.5rem; }
+        
+        .icon-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; color: var(--text-muted); box-shadow: var(--shadow-sm); transition: all 0.2s; }
+        .icon-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); transform: translateY(-2px); }
+        .icon-btn:active { transform: translateY(0); }
+        .icon-btn svg { width: 18px; height: 18px; }
+        
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; padding: 1rem; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+        .modal.active { opacity: 1; pointer-events: auto; }
+        .modal-content { background: var(--surface); border-radius: var(--radius); width: 100%; max-width: 800px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow-lg); transform: scale(0.95) translateY(10px); opacity: 0; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .modal.active .modal-content { transform: scale(1) translateY(0); opacity: 1; }
+        
+        .small-modal { max-width: 400px; padding: 2rem; text-align: center; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 1.2rem 1.5rem; border-bottom: 1px solid var(--border); background: var(--bg); }
+        .close-btn { font-size: 1.5rem; background: none; color: var(--text-muted); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+        .close-btn:hover { background: var(--danger); color: #fff; transform: rotate(90deg); }
+        
+        #preview-body { padding: 1.5rem; overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; align-items: center; background: var(--bg); position: relative;}
+        #preview-body img, #preview-body video { max-width: 100%; border-radius: 8px; box-shadow: var(--shadow-sm); background: var(--surface); }
+        #preview-body pre { width: 100%; background: var(--surface); padding: 1.5rem; border-radius: 8px; overflow-x: auto; white-space: pre-wrap; font-family: var(--mono); font-size: 0.85rem; border: 1px solid var(--border); color: var(--text); }
+        
+        .data-search-container { width: 100%; max-width: 600px; margin-bottom: 1.5rem; }
+        .data-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem; width: 100%; }
+        .data-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem; text-align: left; font-size: 0.9rem; box-shadow: var(--shadow-sm); }
+        .data-card h3 { color: var(--text); margin-bottom: 0.8rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; font-size: 1.05rem; }
+        .data-card p { margin-bottom: 0.4rem; color: var(--text); word-break: break-word;}
+        .data-card strong { color: var(--text-muted); display: inline-block; min-width: 60px; }
+        
+        .empty-state { text-align: center; padding: 3rem 1rem; color: var(--text-muted); grid-column: 1 / -1; }
+
+        /* Fake Terminal Bar */
+        #sys-terminal { position: fixed; bottom: 0; left: 0; width: 100%; height: 32px; background: #0A0A0A; border-top: 1px solid #333; display: flex; align-items: center; justify-content: space-between; padding: 0 1rem; font-family: var(--mono); font-size: 0.75rem; z-index: 100; box-shadow: 0 -4px 10px rgba(0,0,0,0.5); }
+        .term-log { color: #00FF41; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; margin-right: 1rem; }
+        .term-stats { color: #A0A0A0; display: flex; gap: 1rem; white-space: nowrap; }
+        .stat-rust { color: #DEA584; }
+        .stat-cpp { color: #f34b7d; }
+        .stat-go { color: #00ADD8; }
+        .stat-py { color: #3572A5; }
+
+        /* Toasts */
+        #toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 2000; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+        .toast { background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 12px 24px; border-radius: 30px; box-shadow: var(--shadow-lg); font-size: 0.9rem; font-weight: 500; display: flex; align-items: center; gap: 8px; animation: slideDown 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; opacity: 0; transform: translateY(-20px); }
+        .toast.success { border-left: 4px solid var(--success); }
+        .toast.error { border-left: 4px solid var(--danger); }
+        .toast.fade-out { animation: fadeOutUp 0.3s ease forwards; }
+        @keyframes slideDown { to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeOutUp { to { opacity: 0; transform: translateY(-20px); } }
+        
+        /* Blur Overlay for rendering */
+        .rendering-overlay { position: absolute; inset: 0; background: rgba(var(--surface), 0.7); backdrop-filter: blur(4px); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; border-radius: 8px; }
+    </style>
+</head>
+<body>
+
+    <div id="toast-container"></div>
+
+    <header>
+        <div class="logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent)"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            MYR <span>Vault</span>
+        </div>
+        <button id="theme-toggle" aria-label="Toggle Dark Mode">🌓</button>
+    </header>
+
+    <div id="timer-bar" class="hidden">
+        <div style="display:flex; align-items:center;">Session <span id="countdown">05:00</span></div>
+        <button id="close-vault-btn" class="danger-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> Lock
+        </button>
+    </div>
+
+    <main>
+        <section id="view-home" class="view active">
+            <div class="hero-banner">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
+                <h1>Secure Cloud Archives</h1>
+                <p class="subtitle" id="repo-status">Establishing Go concurrency tunnels...</p>
+            </div>
+            <div id="zip-list" class="grid"></div>
+        </section>
+
+        <section id="view-details" class="view">
+            <button class="back-btn" onclick="app.showHome()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg> Back
+            </button>
+            <div class="card detail-card">
+                <h2 id="detail-title"></h2>
+                <div class="meta-data">
+                    <p><span>File:</span> <strong id="detail-filename"></strong></p>
+                    <p><span>Size:</span> <strong id="detail-size"></strong></p>
+                    <p><span>SHA:</span> <strong id="detail-sha" style="font-family: var(--mono);"></strong></p>
+                </div>
+                
+                <div id="download-ui">
+                    <button id="download-unlock-btn" class="primary-btn">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> 
+                        Stream Encrypted Blob
+                    </button>
+                    <div id="download-progress-container" class="hidden">
+                        <div class="progress-container" id="dl-prog-wrap"><div class="progress-bar" id="dl-prog-bar"></div></div>
+                        <span class="progress-text" id="dl-prog-text">Connecting to remote cluster...</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="view-password" class="view">
+            <div class="card detail-card">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent); margin-bottom: 1rem;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                <h2>Unlock Archive</h2>
+                <p class="subtitle">Enter AES-256 key to mount into Rust memory enclave.</p>
+                <input type="password" id="vault-password" placeholder="Enter Password" autocomplete="off">
+                <p id="password-error" class="error-text hidden"></p>
+                
+                <div id="decrypt-progress-container" class="hidden" style="margin-top: 1.5rem; text-align: left;">
+                    <div class="progress-container"><div class="progress-bar" id="dc-prog-bar"></div></div>
+                    <span class="progress-text" id="dc-prog-text">Waking C++ Crypto Engine...</span>
+                </div>
+
+                <button id="unlock-btn" class="primary-btn" style="margin-top: 1rem;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                    Decrypt & Mount
+                </button>
+            </div>
+        </section>
+
+        <section id="view-vault" class="view">
+            <div class="vault-header">
+                <div>
+                    <h2 style="margin-bottom:0;" id="vault-title-display">Decrypted Enclave</h2>
+                    <span class="subtitle" style="font-size:0.85rem;" id="vault-stats">0 files secured in RAM</span>
+                </div>
+            </div>
+            <div class="vault-toolbar">
+                <input type="text" id="vault-search" placeholder="Search decrypted files..." autocomplete="off">
+                <button id="toggle-layout-btn" class="icon-btn" title="Toggle Grid/List">
+                    <svg id="icon-list" class="hidden" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                    <svg id="icon-grid" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                </button>
+            </div>
+            <div id="vault-path" style="margin-bottom: 1rem; font-size: 0.9rem; color: var(--accent); font-weight: 500; word-break: break-all;"></div>
+            
+            <div id="vault-contents" class="grid list-view"></div>
+        </section>
+    </main>
+
+    <div id="sys-terminal">
+        <div class="term-log" id="term-log-text">[sys] Engine initialized. Awaiting commands...</div>
+        <div class="term-stats">
+            <span id="term-ram">RAM: 0MB</span>
+            <span class="stat-cpp">C++: IDLE</span>
+            <span class="stat-rust">RST: IDLE</span>
+        </div>
+    </div>
+
+    <div id="preview-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="preview-title" style="font-size: 1.1rem; margin:0; max-width: 80%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Preview</h3>
+                <button id="close-preview" class="close-btn">×</button>
+            </div>
+            <div id="preview-body"></div>
+        </div>
+    </div>
+
+    <div id="warning-modal" class="modal">
+        <div class="modal-content small-modal">
+            <h3 style="color: var(--danger);">Purge Enclave?</h3>
+            <p style="margin: 1rem 0; font-size: 0.95rem; color: var(--text-muted);">This will trigger a Rust memory panic, securely wiping all decrypted blobs from RAM instantly.</p>
+            <div class="modal-actions" style="display:flex; gap: 10px; margin-top: 1.5rem;">
+                <button id="cancel-close" class="secondary-btn">Cancel</button>
+                <button id="confirm-close" class="danger-btn">Wipe & Lock</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    /** * CONFIGURATION */
+    const CONFIG = {
+        GITHUB_REPO: 'unskyit/vault', 
+        ZIPS_FOLDER_PATH: 'zips'
+    };
+
+    zip.configure({ useWebWorkers: false });
+
+    const app = (() => {
+        let manifest = [];
+        let activeZip = null;
+        let encryptedBlob = null;
+        
+        let activeZipReader = null; // NEW: Keeps the zip reader open for lazy loading
+        let decryptedFiles = []; 
+        let sessionTimer = null;
+        let views = {}; 
+        
+        let currentFolder = ""; 
+        let isListView = true;
+
+        const getMimeType = (ext) => {
+            const mimes = {
+                'mp4': 'video/mp4', 'webm': 'video/webm', 'avi': 'video/x-msvideo',
+                'pdf': 'application/pdf',
+                'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp',
+                'mp3': 'audio/mpeg', 'wav': 'audio/wav',
+                'vcf': 'text/vcard', 'txt': 'text/plain', 'json': 'application/json', 'csv': 'text/csv'
+            };
+            return mimes[ext] || 'application/octet-stream';
+        };
+
+        // --- TOAST NOTIFICATIONS ---
+        const showToast = (message, type = 'success') => {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            
+            const icon = type === 'success' ? '✓' : '⚠';
+            toast.innerHTML = `<span style="font-weight:bold">${icon}</span> ${message}`;
+            
+            container.appendChild(toast);
+            
+            if (navigator.vibrate) navigator.vibrate(type === 'success' ? 50 : [100, 50, 100]);
+
+            setTimeout(() => {
+                toast.classList.add('fade-out');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        };
+
+        const init = async () => {
+            views = {
+                home: document.getElementById('view-home'),
+                details: document.getElementById('view-details'),
+                password: document.getElementById('view-password'),
+                vault: document.getElementById('view-vault')
+            };
+
+            initTheme();
+            bindEvents();
+            initHackerTerminal(); 
+            await fetchGitHubDirectory();
+        };
+
+        const initHackerTerminal = () => {
+            const logText = document.getElementById('term-log-text');
+            const ramText = document.getElementById('term-ram');
+            
+            const fakeLogs = [
+                "[rust] fn allocate_secure_buffer(size: usize) -> Vec<u8> {...",
+                "[rust] Enclave sealed against heap dumps.",
+                "[cpp] int generate_cpu_entropy() { auto now = chrono... }",
+                "[cpp] Hardware AES-GCM Acceleration Thread 0 [ACTIVE]",
+                "[py] Scanning for debuggers and memory hooks...",
+                "[py] Environment secure. Threat level: ZERO",
+                "[go] establish_tunnel(id int) { fmt.Printf(...) }",
+                "[go] Tunnel secured for encrypted chunk stream.",
+                "[sys] Running garbage collection on orphaned blobs...",
+                "[sys] Memory integrity verification passed (SHA-256 matches)."
+            ];
+
+            setInterval(() => {
+                if (Math.random() > 0.4) {
+                    const log = fakeLogs[Math.floor(Math.random() * fakeLogs.length)];
+                    let color = "#00FF41"; 
+                    if (log.includes("[rust]")) color = "#DEA584";
+                    if (log.includes("[cpp]")) color = "#f34b7d";
+                    if (log.includes("[py]")) color = "#3572A5";
+                    if (log.includes("[go]")) color = "#00ADD8";
+                    logText.innerHTML = `<span style="color:${color}">${log}</span>`;
+                }
+                
+                // RAM reflects loaded URLs roughly
+                const loadedBlobs = decryptedFiles.filter(f => f.url).length;
+                const baseRam = loadedBlobs > 0 ? (120 + (loadedBlobs * 45)) : 64;
+                const fluctuate = Math.floor(Math.random() * 15);
+                ramText.innerText = `RAM: ${baseRam + fluctuate}MB`;
+
+            }, 1200);
+        };
+
+        const initTheme = () => {
+            if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+            document.getElementById('theme-toggle').addEventListener('click', () => {
+                const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', next);
+                localStorage.setItem('theme', next);
+                if (navigator.vibrate) navigator.vibrate(20);
+            });
+        };
+
+        const bindEvents = () => {
+            document.getElementById('download-unlock-btn').addEventListener('click', fetchWithProgress);
+            document.getElementById('unlock-btn').addEventListener('click', triggerFakeBootSequence);
+            document.getElementById('vault-password').addEventListener('keypress', (e) => { if(e.key === 'Enter') triggerFakeBootSequence(); });
+            
+            document.getElementById('vault-search').addEventListener('input', (e) => {
+                renderVaultUI(e.target.value.toLowerCase());
+            });
+
+            document.getElementById('toggle-layout-btn').addEventListener('click', () => {
+                if (navigator.vibrate) navigator.vibrate(30);
+                isListView = !isListView;
+                const container = document.getElementById('vault-contents');
+                isListView ? container.classList.add('list-view') : container.classList.remove('list-view');
+                
+                document.getElementById('icon-list').classList.toggle('hidden', isListView);
+                document.getElementById('icon-grid').classList.toggle('hidden', !isListView);
+            });
+            
+            const warnModal = document.getElementById('warning-modal');
+            const prevModal = document.getElementById('preview-modal');
+            
+            document.getElementById('close-vault-btn').addEventListener('click', () => {
+                if (navigator.vibrate) navigator.vibrate(50);
+                warnModal.classList.add('active');
+            });
+            
+            document.getElementById('cancel-close').addEventListener('click', () => warnModal.classList.remove('active'));
+            document.getElementById('confirm-close').addEventListener('click', forceWipeMemory);
+            
+            document.getElementById('close-preview').addEventListener('click', () => {
+                if (navigator.vibrate) navigator.vibrate(20);
+                prevModal.classList.remove('active');
+                setTimeout(() => document.getElementById('preview-body').innerHTML = '', 300);
+            });
+
+            document.addEventListener('contextmenu', (e) => { if(views.vault.classList.contains('active')) e.preventDefault(); });
+        };
+
+        const showView = (v) => {
+            Object.values(views).forEach(el => el.classList.remove('active'));
+            views[v].classList.add('active');
+            
+            const pwdInput = document.getElementById('vault-password');
+            const pwdError = document.getElementById('password-error');
+            if (pwdInput) pwdInput.value = '';
+            if (pwdError) pwdError.classList.add('hidden');
+        };
+
+        const formatBytes = (bytes) => {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB'], i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        };
+
+        const fetchGitHubDirectory = async () => {
+            const statusEl = document.getElementById('repo-status');
+            try {
+                const url = `https://api.github.com/repos/${CONFIG.GITHUB_REPO}/contents/${CONFIG.ZIPS_FOLDER_PATH}`;
+                const res = await fetch(url);
+                if (res.status === 403) throw new Error("GitHub API rate limit exceeded.");
+                if (!res.ok) throw new Error("Folder not found. Ensure repository and folder exist.");
+                
+                const data = await res.json();
+                manifest = data.filter(item => item.name.endsWith('.zip')).map(item => ({
+                    id: item.sha, filename: item.name,
+                    title: item.name.replace('.zip', '').replace(/[-_]/g, ' ').toUpperCase(),
+                    size: formatBytes(item.size), downloadUrl: item.download_url
+                }));
+
+                statusEl.innerText = `[Go] ${manifest.length} remote encrypted blobs found.`;
+                document.getElementById('zip-list').innerHTML = manifest.map(item => `
+                    <div class="card" onclick="app.showDetails('${item.id}')">
+                        <h3 class="card-title"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> ${item.title}</h3>
+                        <div class="card-meta"><span>${item.filename}</span> <span>${item.size}</span></div>
+                    </div>
+                `).join('');
+            } catch (e) { statusEl.innerHTML = `<span style="color:var(--danger)">Error: ${e.message}</span>`; }
+        };
+
+        const showDetails = (id) => {
+            if (navigator.vibrate) navigator.vibrate(30);
+            activeZip = manifest.find(i => i.id === id);
+            document.getElementById('detail-title').innerText = activeZip.title;
+            document.getElementById('detail-filename').innerText = activeZip.filename;
+            document.getElementById('detail-size').innerText = activeZip.size;
+            document.getElementById('detail-sha').innerText = activeZip.id.substring(0, 12) + '...';
+            
+            document.getElementById('download-unlock-btn').classList.remove('hidden');
+            document.getElementById('download-progress-container').classList.add('hidden');
+            document.getElementById('dl-prog-wrap').classList.remove('indeterminate');
+            document.getElementById('dl-prog-bar').style.width = '0%';
+            
+            showView('details');
+        };
+
+        const fetchWithProgress = async () => {
+            if (navigator.vibrate) navigator.vibrate(30);
+            const btn = document.getElementById('download-unlock-btn');
+            const progContainer = document.getElementById('download-progress-container');
+            const progBar = document.getElementById('dl-prog-bar');
+            const progText = document.getElementById('dl-prog-text');
+
+            btn.classList.add('hidden');
+            progContainer.classList.remove('hidden');
+            progText.innerHTML = "<span style='color:#00ADD8'>[Go]</span> Establishing data stream...";
+
+            try {
+                const response = await fetch(activeZip.downloadUrl);
+                if (!response.ok) throw new Error("Network response was not ok");
+                const total = parseInt(response.headers.get('content-length') || '0', 10);
+                if (total === 0) document.getElementById('dl-prog-wrap').classList.add('indeterminate');
+
+                let loaded = 0;
+                const reader = response.body.getReader();
+                const chunks = [];
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                    loaded += value.length;
+                    
+                    if (total > 0) {
+                        const percent = Math.round((loaded / total) * 100);
+                        progBar.style.width = `${percent}%`;
+                        progText.innerText = `Buffering to local cache: ${percent}%`;
+                    }
+                }
+
+                progBar.style.width = '100%';
+                progText.innerHTML = "<span style='color:#3572A5'>[Py]</span> Threat heuristics cleared. Ready.";
+                document.getElementById('dl-prog-wrap').classList.remove('indeterminate');
+                
+                encryptedBlob = new Blob(chunks);
+                setTimeout(() => showView('password'), 800);
+            } catch (e) {
+                progText.innerText = "Error streaming blob.";
+                progText.style.color = 'var(--danger)';
+            }
+        };
+
+        const triggerFakeBootSequence = async () => {
+            if (navigator.vibrate) navigator.vibrate(30);
+            const pwdInput = document.getElementById('vault-password');
+            const pwd = pwdInput.value;
+            if (!pwd) return;
+
+            const btn = document.getElementById('unlock-btn');
+            const progContainer = document.getElementById('decrypt-progress-container');
+            const progBar = document.getElementById('dc-prog-bar');
+            const progText = document.getElementById('dc-prog-text');
+
+            btn.classList.add('hidden');
+            progContainer.classList.remove('hidden');
+            document.getElementById('password-error').classList.add('hidden');
+            
+            const steps = [
+                { text: "<span style='color:#3572A5'>[Py]</span> Analyzing key entropy...", w: "10%" },
+                { text: "<span style='color:#f34b7d'>[C++]</span> Waking Hardware Crypto Engine...", w: "25%" },
+                { text: "<span style='color:#DEA584'>[Rust]</span> Allocating Secure Memory Enclave...", w: "45%" },
+                { text: "<span style='color:#f34b7d'>[C++]</span> Deriving AES-256 Key...", w: "60%" }
+            ];
+
+            for (let i = 0; i < steps.length; i++) {
+                progBar.style.width = steps[i].w;
+                progText.innerHTML = steps[i].text;
+                await new Promise(r => setTimeout(r, 400 + Math.random() * 300));
+            }
+
+            attemptUnlock(pwd, progBar, progText, btn);
+        };
+
+        // --- OPTIMIZED UNLOCK LOGIC (LAZY LOADING) ---
+        const attemptUnlock = async (pwd, progBar, progText, btn) => {
+            try {
+                // Keep the reader instance alive in app scope
+                activeZipReader = new zip.ZipReader(new zip.BlobReader(encryptedBlob), { password: pwd });
+                const entries = await activeZipReader.getEntries();
+                if (!entries.length) throw new Error("Archive is empty.");
+
+                // Validate password by attempting to read 1 byte of a file
+                const testFile = entries.find(e => !e.directory && e.uncompressedSize > 0);
+                if (testFile) await testFile.getData(new zip.Uint8ArrayWriter(), { length: 1 });
+
+                progText.innerHTML = "<span style='color:#00FF41'>[SYS]</span> Key Verified. Mapping Metadata...";
+                document.querySelector('.stat-rust').innerText = "RST: ACTIVE";
+                document.querySelector('.stat-cpp').innerText = "C++: ACTIVE";
+                
+                await processMetadataToMemory(entries, progBar, progText);
+                
+                document.getElementById('vault-password').value = ''; 
+                initSecureTimer();
+                showToast("Enclave successfully mounted", "success");
+
+            } catch (e) {
+                const progContainer = document.getElementById('decrypt-progress-container');
+                
+                document.querySelector('.stat-rust').innerText = "RST: IDLE";
+                document.querySelector('.stat-cpp').innerText = "C++: IDLE";
+                btn.classList.remove('hidden');
+                progContainer.classList.add('hidden');
+                
+                if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+                
+                const err = document.getElementById('password-error');
+                document.getElementById('vault-password').disabled = true;
+                btn.disabled = true;
+                err.classList.remove('hidden');
+                
+                let timeLeft = 30;
+                const tick = setInterval(() => {
+                    err.innerHTML = `<span style="color:#f34b7d">[C++]</span> Key Rejected. Security Lockout: ${timeLeft}s.`;
+                    btn.innerText = `Locked (${timeLeft}s)`;
+                    timeLeft--;
+                    if (timeLeft < 0) {
+                        clearInterval(tick);
+                        document.getElementById('vault-password').disabled = false;
+                        btn.disabled = false;
+                        btn.innerText = "Decrypt & Mount";
+                        err.classList.add('hidden');
+                    }
+                }, 1000);
+            }
+        };
+
+        const processMetadataToMemory = async (entries, progBar, progText) => {
+            decryptedFiles = [];
+            const filesToMap = entries.filter(e => !e.directory);
+            const totalFiles = filesToMap.length;
+
+            for (let i=0; i < filesToMap.length; i++) {
+                const entry = filesToMap[i];
+                const fullPath = entry.filename; 
+                const safeName = fullPath.split('/').pop().replace(/[^a-zA-Z0-9.\-_ ()]/g, '');
+                if (!safeName) continue;
+                
+                const ext = safeName.split('.').pop().toLowerCase();
+                
+                // Store metadata and the reference to the zip entry. Do NOT extract blob yet.
+                decryptedFiles.push({
+                    fullPath: fullPath,
+                    pathDir: fullPath.substring(0, fullPath.lastIndexOf('/') + 1),
+                    name: safeName, 
+                    ext: ext,
+                    entry: entry, // Reference for lazy loading
+                    url: null,    // Will hold ObjectURL when extracted
+                    rawBlob: null,
+                    index: decryptedFiles.length 
+                });
+                
+                if (i % 10 === 0) { // Update progress bar periodically
+                    progBar.style.width = `${60 + ((i / totalFiles) * 40)}%`;
+                    await new Promise(r => setTimeout(r, 10)); // tiny delay for visual effect
+                }
+            }
+
+            progBar.style.width = `100%`;
+            progText.innerHTML = "<span style='color:#00FF41'>[SYS]</span> Structure mapped. Mounting UI...";
+            document.getElementById('vault-title-display').innerText = activeZip.title;
+            document.getElementById('vault-stats').innerText = `${totalFiles} items secured in Index`;
+            
+            currentFolder = ""; 
+            renderVaultUI();
+            
+            setTimeout(() => {
+                showView('vault');
+                document.getElementById('unlock-btn').classList.remove('hidden');
+                document.getElementById('decrypt-progress-container').classList.add('hidden');
+            }, 800);
+        };
+
+        const getIcon = (ext) => {
+            const i = { pdf:'📄', txt:'📝', md:'📝', csv:'📊', json:'⚙️', jpg:'🖼️', png:'🖼️', mp4:'🎥', mp3:'🎵', zip:'📦', db:'🗄️', vcf:'📇' };
+            return i[ext] || '📄';
+        };
+
+        const renderVaultUI = (searchQuery = "") => {
+            const container = document.getElementById('vault-contents');
+            const pathDisplay = document.getElementById('vault-path');
+            
+            pathDisplay.innerText = currentFolder === "" ? "/ Enclave Root" : `/ ${currentFolder}`;
+            let html = "";
+            
+            if (searchQuery) {
+                const results = decryptedFiles.filter(f => f.name.toLowerCase().includes(searchQuery));
+                if (results.length === 0) {
+                    container.innerHTML = `<div class="empty-state">No files match "${searchQuery}"</div>`;
+                    return;
+                }
+                html += results.map(f => generateFileHTML(f)).join('');
+                container.innerHTML = html;
+                return;
+            }
+
+            const folders = new Set();
+            const filesInDir = [];
+
+            decryptedFiles.forEach(f => {
+                if (f.pathDir.startsWith(currentFolder)) {
+                    const relativePath = f.pathDir.substring(currentFolder.length);
+                    if (relativePath === "") {
+                        filesInDir.push(f);
+                    } else {
+                        const nextFolder = relativePath.split('/')[0];
+                        folders.add(currentFolder + nextFolder + '/');
+                    }
+                }
+            });
+
+            if (currentFolder !== "") {
+                const parentDir = currentFolder.split('/').slice(0, -2).join('/');
+                const target = parentDir === "" ? "" : parentDir + "/";
+                html += `
+                    <div class="card file-card folder-card" onclick="app.navTo('${target}')">
+                        <div class="file-info">
+                            <span class="file-icon" style="color:var(--accent);">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6"/><path d="M9 13l3-3 3 3"/></svg>
+                            </span>
+                            <span class="file-name">Level Up</span>
+                        </div>
+                    </div>`;
+            }
+
+            Array.from(folders).sort().forEach(folderPath => {
+                const folderName = folderPath.split('/').slice(-2)[0];
+                html += `
+                    <div class="card file-card folder-card" onclick="app.navTo('${folderPath}')">
+                        <div class="file-info"><span class="file-icon">📁</span><span class="file-name">${folderName}</span></div>
+                        <span style="color:var(--text-muted); font-size: 0.8rem; font-family:var(--mono);">[ENTER]</span>
+                    </div>`;
+            });
+
+            filesInDir.sort((a, b) => a.ext.localeCompare(b.ext) || a.name.localeCompare(b.name)).forEach(f => {
+                html += generateFileHTML(f);
+            });
+
+            if (html === "") html = `<div class="empty-state">Memory sector empty.</div>`;
+            container.innerHTML = html;
+        };
+
+        const generateFileHTML = (f) => {
+            const isLoaded = f.url ? '<div style="width:8px; height:8px; background:var(--success); border-radius:50%; display:inline-block; margin-right:5px;" title="Cached in RAM"></div>' : '';
+            return `
+            <div class="card file-card">
+                <div class="file-info">
+                    <span class="file-icon">${getIcon(f.ext)}</span>
+                    <span class="file-name" title="${f.name}">${isLoaded}${f.name}</span>
+                </div>
+                <div class="file-actions">
+                    <button class="icon-btn" onclick="app.preview(${f.index})" title="Preview"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
+                    <button class="icon-btn" onclick="app.save(${f.index})" title="Save"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg></button>
+                </div>
+            </div>`;
+        };
+
+        const initDataSearch = () => {
+            const input = document.getElementById('internal-data-search');
+            if (input) {
+                input.addEventListener('input', (e) => {
+                    const term = e.target.value.toLowerCase();
+                    document.querySelectorAll('.data-card').forEach(card => {
+                        card.style.display = card.innerText.toLowerCase().includes(term) ? 'block' : 'none';
+                    });
+                });
+            }
+        };
+
+        // --- LAZY LOAD EXTRACTION METHOD ---
+        const ensureFileExtracted = async (file) => {
+            if (file.url) return; // Already extracted
+            
+            const body = document.getElementById('preview-body');
+            // Overlay loading state over the modal body
+            const loader = document.createElement('div');
+            loader.className = 'rendering-overlay';
+            loader.innerHTML = '<div class="progress-container indeterminate" style="width:150px;"><div class="progress-bar"></div></div><p style="margin-top:1rem; color:var(--text); font-family:var(--mono);">Decrypting block to RAM...</p>';
+            body.appendChild(loader);
+
+            try {
+                const mime = getMimeType(file.ext);
+                const blob = await file.entry.getData(new zip.BlobWriter(mime));
+                file.url = URL.createObjectURL(blob);
+                file.rawBlob = blob;
+                // Re-render the folder UI so the green "Loaded" dot appears
+                renderVaultUI(document.getElementById('vault-search').value.toLowerCase());
+            } catch (err) {
+                console.error("Extraction error:", err);
+                showToast("Decryption failed. Memory corrupt.", "error");
+            } finally {
+                loader.remove();
+            }
+        };
+
+        const preview = async (globalIndex) => {
+            if (navigator.vibrate) navigator.vibrate(20);
+            const file = decryptedFiles[globalIndex];
+            const body = document.getElementById('preview-body');
+            document.getElementById('preview-title').innerText = file.name;
+            body.innerHTML = ''; 
+            document.getElementById('preview-modal').classList.add('active');
+
+            // Lazy Load the file if not in RAM
+            await ensureFileExtracted(file);
+            if (!file.url) return;
+
+            try {
+                if (['jpg','jpeg','png','gif','webp','svg'].includes(file.ext)) {
+                    body.innerHTML = `<img src="${file.url}">`;
+                } else if (['mp4','webm','avi'].includes(file.ext)) {
+                    body.innerHTML = `<video src="${file.url}" controls autoplay style="width:100%; border-radius:8px;"></video>`;
+                } else if (['mp3','wav'].includes(file.ext)) {
+                    body.innerHTML = `<audio src="${file.url}" controls autoplay style="width:100%"></audio>`;
+                } else if (file.ext === 'pdf') {
+                    body.innerHTML = `
+                        <div style="text-align:center; padding: 3rem 1rem; width: 100%;">
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--danger); margin-bottom:1rem;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            <h3 style="margin-bottom:0.5rem; color: var(--text);">Secure PDF Document</h3>
+                            <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:2rem;">Browser security prevents previewing encrypted PDF blobs inline. Please save the file to view it natively.</p>
+                            <button class="primary-btn" onclick="app.save(${globalIndex})" style="max-width:250px; margin:0 auto;">Download & View PDF</button>
+                        </div>`;
+                } else if (file.ext === 'vcf') {
+                    const text = await file.rawBlob.text();
+                    const vcards = text.split('BEGIN:VCARD').filter(v => v.trim());
+                    let cardsHtml = vcards.map(vcard => {
+                        const lines = vcard.split('\n');
+                        let name = 'Unknown Contact', details = '';
+                        lines.forEach(line => {
+                            if(line.startsWith('FN:')) name = line.substring(3).trim();
+                            else if(line.includes('TEL')) details += `<p><strong>Phone:</strong> <a href="tel:${line.split(':')[1]}" style="color:var(--accent); text-decoration:none;">${line.split(':')[1]}</a></p>`;
+                            else if(line.includes('EMAIL')) details += `<p><strong>Email:</strong> <a href="mailto:${line.split(':')[1]}" style="color:var(--accent); text-decoration:none;">${line.split(':')[1]}</a></p>`;
+                        });
+                        return `<div class="data-card"><h3>${name}</h3>${details}</div>`;
+                    }).join('');
+                    
+                    body.innerHTML = `<div class="data-search-container"><input type="text" id="internal-data-search" placeholder="Search contacts..." autocomplete="off"></div><div class="data-grid">${cardsHtml || "<p style='color:var(--text-muted)'>No readable contacts found.</p>"}</div>`;
+                    initDataSearch();
+                } else if (file.ext === 'csv') {
+                    const text = await file.rawBlob.text();
+                    const rows = text.split('\n').filter(r => r.trim());
+                    if (rows.length > 0) {
+                        const headers = rows[0].split(',').map(h => h.trim());
+                        let cardsHtml = rows.slice(1).map(row => {
+                            const cols = row.split(',').map(c => c.trim());
+                            let content = '';
+                            headers.forEach((h, i) => { if(cols[i]) content += `<p><strong>${h}:</strong> ${cols[i]}</p>`; });
+                            return `<div class="data-card">${content}</div>`;
+                        }).join('');
+                        body.innerHTML = `<div class="data-search-container"><input type="text" id="internal-data-search" placeholder="Search records..." autocomplete="off"></div><div class="data-grid">${cardsHtml}</div>`;
+                        initDataSearch();
+                    } else body.innerHTML = `<p style="color:var(--text-muted)">CSV file is empty.</p>`;
+                } else if (['txt','md','json','xml'].includes(file.ext)) {
+                    const text = await file.rawBlob.text();
+                    if (file.ext === 'json') { try { body.innerHTML = `<pre>${JSON.stringify(JSON.parse(text), null, 2)}</pre>`; } catch { body.innerHTML = `<pre>${text}</pre>`; } }
+                    else body.innerHTML = `<pre>${text}</pre>`;
+                } else if (['db', 'sqlite'].includes(file.ext)) {
+                    const view = new Uint8Array(await file.rawBlob.arrayBuffer());
+                    let extract = "", curr = "";
+                    for(let i=0; i < Math.min(view.length, 50000); i++) {
+                        if(view[i] >= 32 && view[i] <= 126) curr += String.fromCharCode(view[i]);
+                        else { if(curr.length > 4) extract += curr + "\n"; curr = ""; }
+                    }
+                    body.innerHTML = `<div><p style="color:var(--text-muted);margin-bottom:1rem;font-size:0.9rem;"><i>Binary Data File. Raw string extraction (first 50KB):</i></p><pre>${extract || "No legible strings found."}</pre></div>`;
+                } else body.innerHTML = `<p style="text-align:center; padding: 2rem; color:var(--text-muted);">No in-browser preview available.</p>`;
+            } catch (e) { body.innerHTML = `<p class="error-text" style="text-align:center;">Preview error: ${e.message}</p>`; }
+        };
+
+        const save = async (globalIndex) => {
+            if (navigator.vibrate) navigator.vibrate(20);
+            const file = decryptedFiles[globalIndex];
+            
+            // Show toast and lazy load if necessary
+            showToast("Decrypting & Saving...", "success");
+            await ensureFileExtracted(file);
+            if (!file.url) return;
+
+            const a = document.createElement('a');
+            a.href = file.url; 
+            a.download = file.name;
+            a.click();
+        };
+
+        const initSecureTimer = () => {
+            document.getElementById('timer-bar').classList.remove('hidden');
+            let time = 300; 
+            const update = () => document.getElementById('countdown').innerText = `${Math.floor(time/60).toString().padStart(2,'0')}:${(time%60).toString().padStart(2,'0')}`;
+            update();
+            sessionTimer = setInterval(() => { time--; update(); if(time <= 0) forceWipeMemory(); }, 1000);
+        };
+
+        const forceWipeMemory = async () => {
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+            clearInterval(sessionTimer);
+            document.getElementById('timer-bar').classList.add('hidden');
+            document.getElementById('warning-modal').classList.remove('active');
+            
+            document.getElementById('term-log-text').innerHTML = "<span style='color:#f34b7d'>[SYS] Rust panic triggered. Enclave purged.</span>";
+            document.querySelector('.stat-rust').innerText = "RST: IDLE";
+            document.querySelector('.stat-cpp').innerText = "C++: IDLE";
+
+            // Clean up resources properly
+            decryptedFiles.forEach(f => { if(f.url) URL.revokeObjectURL(f.url); });
+            if (activeZipReader) await activeZipReader.close();
+            
+            decryptedFiles = []; 
+            encryptedBlob = null; 
+            activeZip = null; 
+            activeZipReader = null;
+            currentFolder = "";
+            
+            document.getElementById('vault-contents').innerHTML = '';
+            document.getElementById('vault-search').value = '';
+            document.getElementById('preview-modal').classList.remove('active');
+            setTimeout(() => document.getElementById('preview-body').innerHTML = '', 300);
+            
+            showToast("Memory enclave securely wiped.", "success");
+            showView('home');
+        };
+
+        return { init, showHome: () => { if(navigator.vibrate) navigator.vibrate(20); showView('home'); }, showDetails, preview, save, navTo: (path) => { if(navigator.vibrate) navigator.vibrate(20); currentFolder = path; renderVaultUI(); } };
+    })();
+
+    document.addEventListener('DOMContentLoaded', app.init);
+    </script>
+</body>
+</html>
